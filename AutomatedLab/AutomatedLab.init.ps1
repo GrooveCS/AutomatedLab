@@ -1,71 +1,64 @@
-﻿if ($PSEdition -eq 'Core')
-{
-    Add-Type -Path $PSScriptRoot/lib/core/AutomatedLab.dll
+﻿
+$alModulePath = (Get-Module -ListAvailable -Name AutomatedLab).ModuleBase
+
+#region PSEdition Core
+if ($PSEdition -eq 'Core') {
+      
+    Add-Type -Path "$alModulePath/lib/core/AutomatedLab.dll" -PassThru
 
     # These modules SHOULD be marked as Core compatible, as tested with Windows 10.0.18362.113
     # However, if they are not, they need to be imported.
-    $requiredModules = @('Dism')
+    $requiredModules = @('DISM')
     $requiredModulesImplicit = @('International') # These modules should be imported via implicit remoting. Might suffer from implicit sessions getting removed though
 
-    $ipmoErr = $null # Initialize, otherwise Import-MOdule -Force will extend this variable indefinitely
-    if ($requiredModulesImplicit)
-    {
-        try
-        {
-            if ((Get-Command Import-Module).Parameters.ContainsKey('UseWindowsPowerShell'))
-            {
-                Import-Module -Name $requiredModulesImplicit -UseWindowsPowerShell -WarningAction SilentlyContinue -ErrorAction Stop -Force -ErrorVariable +ipmoErr
+    $importError = $null # Initialize, otherwise Import-Module -Force will extend this variable indefinitely
+    if ($requiredModulesImplicit) {
+        try {
+            if ((Get-Command Import-Module).Parameters.ContainsKey('UseWindowsPowerShell')) {
+                Import-Module -Name $requiredModulesImplicit -UseWindowsPowerShell -WarningAction SilentlyContinue -ErrorAction Stop -Force -ErrorVariable +importError
             }
-            else
-            {
-                Import-WinModule -Name $requiredModulesImplicit -WarningAction SilentlyContinue -ErrorAction Stop -Force -ErrorVariable +ipmoErr
+            else {
+                Import-WinModule -Name $requiredModulesImplicit -WarningAction SilentlyContinue -ErrorAction Stop -Force -ErrorVariable +importError
             }
         }
-        catch
-        {
+        catch {
             Remove-Module -Name $requiredModulesImplicit -Force -ErrorAction SilentlyContinue
-            Clear-Variable -Name ipmoErr -ErrorAction SilentlyContinue
-            foreach ($m in $requiredModulesImplicit)
-            {
-                Get-ChildItem -Directory -Path ([IO.Path]::GetTempPath()) -Filter "RemoteIpMoProxy_$($m)*_localhost_*" | Remove-Item -Recurse -Force
+            Clear-Variable -Name importError -ErrorAction SilentlyContinue
+            foreach ($m in $requiredModulesImplicit) {
+                Get-ChildItem -Directory -Path ($env:TEMP) -Filter "RemoteIpMoProxy_$($m)*_localhost_*" | Remove-Item -Recurse -Force
             }
 
-            if ((Get-Command Import-Module).Parameters.ContainsKey('UseWindowsPowerShell'))
-            {
-                Import-Module -Name $requiredModulesImplicit -UseWindowsPowerShell -WarningAction SilentlyContinue -ErrorAction SilentlyContinue -Force -ErrorVariable +ipmoErr
+            if ((Get-Command Import-Module).Parameters.ContainsKey('UseWindowsPowerShell')) {
+                Import-Module -Name $requiredModulesImplicit -UseWindowsPowerShell -WarningAction SilentlyContinue -ErrorAction SilentlyContinue -Force -ErrorVariable +importError
             }
-            else
-            {
-                Import-WinModule -Name $requiredModulesImplicit -WarningAction SilentlyContinue -ErrorAction SilentlyContinue -Force -ErrorVariable +ipmoErr
+            else {
+                Import-WinModule -Name $requiredModulesImplicit -WarningAction SilentlyContinue -ErrorAction SilentlyContinue -Force -ErrorVariable +importError
             }
         }
     }
 
-    if ($requiredModules)
-    {
-        Import-Module -Name $requiredModules -SkipEditionCheck -WarningAction SilentlyContinue -ErrorAction SilentlyContinue -Force -ErrorVariable +ipmoErr
+    if ($requiredModules) {
+        Import-Module -Name $requiredModules -SkipEditionCheck -WarningAction SilentlyContinue -ErrorAction SilentlyContinue -Force -ErrorVariable +importError
     }
 
-    if ($ipmoErr)
-    {
-        Write-PSFMessage -Level Warning -Message "Could not import modules: $($ipmoErr.TargetObject -join ',') - your experience might be impacted."
+    if ($importError) {
+        Write-PSFMessage -Level Warning -Message "Could not import modules: $($importError.TargetObject -join ',') - your experience might be impacted."
     }
 }
-else
-{
-    Add-Type -Path $PSScriptRoot/lib/full/AutomatedLab.dll
+#endregion
+#region $PSEdition Full
+else {
+    Add-Type -Path "$alModulePath/lib/core/AutomatedLab.dll"
 }
+#endregion
+$usedRelease = (Get-Module -Name AutomatedLab).Version -as [Version]
+$currentRelease = try { ((Invoke-RestMethod -Method Get -Uri https://api.github.com/repos/AutomatedLab/AutomatedLab/releases/latest -ErrorAction Stop).tag_Name -replace 'v') -as [Version] } catch {}
 
-$usedRelease = (Split-Path -Leaf -Path $PSScriptRoot) -as [version]
-$currentRelease = try {((Invoke-RestMethod -Method Get -Uri https://api.github.com/repos/AutomatedLab/AutomatedLab/releases/latest -ErrorAction Stop).tag_Name -replace 'v') -as [Version] } catch {}
-
-if ($currentRelease -and $usedRelease -lt $currentRelease)
-{
+if ($currentRelease -and $usedRelease -lt $currentRelease) {
     Write-PSFMessage -Level Host -Message "Your version of AutomatedLab is outdated. Consider updating to the recent version, $currentRelease"
 }
 
-if ((Get-Module -ListAvailable Ships) -and (Get-Module -ListAvailable AutomatedLab.Ships))
-{
+if ((Get-Module -ListAvailable Ships) -and (Get-Module -ListAvailable AutomatedLab.Ships)) {
     Import-Module Ships, AutomatedLab.Ships
     [void] (New-PSDrive -PSProvider SHiPS -Name Labs -Root "AutomatedLab.Ships#LabHost" -WarningAction SilentlyContinue -ErrorAction SilentlyContinue)
 }
@@ -299,13 +292,13 @@ Set-PSFConfig -Module AutomatedLab -Name Dynamics365Uri -Value 'https://download
 # Validation
 Set-PSFConfig -Module AutomatedLab -Name ValidationSettings -Value @{
     ValidRoleProperties     = @{
-        Orchestrator2012 = @(
+        Orchestrator2012   = @(
             'DatabaseServer'
             'DatabaseName'
             'ServiceAccount'
             'ServiceAccountPassword'
         )
-        DC               = @(
+        DC                 = @(
             'IsReadOnly'
             'SiteName'
             'SiteSubnet'
@@ -314,7 +307,7 @@ Set-PSFConfig -Module AutomatedLab -Name ValidationSettings -Value @{
             'SysvolPath'
             'DsrmPassword'
         )
-        CaSubordinate    = @(
+        CaSubordinate      = @(
             'ParentCA'
             'ParentCALogicalName'
             'CACommonName'
@@ -355,14 +348,14 @@ Set-PSFConfig -Module AutomatedLab -Name ValidationSettings -Value @{
             'OCSPHTTPURL02'
             'DoNotLoadDefaultTemplates'
         )
-        Office2016       = 'SharedComputerLicensing'
-        DSCPullServer    = @(
+        Office2016         = 'SharedComputerLicensing'
+        DSCPullServer      = @(
             'DoNotPushLocalModules'
             'DatabaseEngine'
             'SqlServer'
             'DatabaseName'
         )
-        FirstChildDC     = @(
+        FirstChildDC       = @(
             'ParentDomain'
             'NewDomain'
             'DomainFunctionalLevel'
@@ -374,12 +367,12 @@ Set-PSFConfig -Module AutomatedLab -Name ValidationSettings -Value @{
             'SysvolPath'
             'DsrmPassword'
         )
-        ADFS             = @(
+        ADFS               = @(
             'DisplayName'
             'ServiceName'
             'ServicePassword'
         )
-        RootDC           = @(
+        RootDC             = @(
             'DomainFunctionalLevel'
             'ForestFunctionalLevel'
             'SiteName'
@@ -390,7 +383,7 @@ Set-PSFConfig -Module AutomatedLab -Name ValidationSettings -Value @{
             'SysvolPath'
             'DsrmPassword'
         )
-        CaRoot           = @(
+        CaRoot             = @(
             'CACommonName'
             'CAType'
             'KeyLength'
@@ -429,11 +422,11 @@ Set-PSFConfig -Module AutomatedLab -Name ValidationSettings -Value @{
             'OCSPHTTPURL02'
             'DoNotLoadDefaultTemplates'
         )
-        Tfs2015 = @('Port','InitialCollection', 'DbServer')
-        Tfs2017 = @('Port','InitialCollection', 'DbServer')
-        Tfs2018 = @('Port','InitialCollection', 'DbServer')
-        AzDevOps = @('Port','InitialCollection', 'DbServer','PAT','Organisation')
-        TfsBuildWorker   = @(
+        Tfs2015            = @('Port', 'InitialCollection', 'DbServer')
+        Tfs2017            = @('Port', 'InitialCollection', 'DbServer')
+        Tfs2018            = @('Port', 'InitialCollection', 'DbServer')
+        AzDevOps           = @('Port', 'InitialCollection', 'DbServer', 'PAT', 'Organisation')
+        TfsBuildWorker     = @(
             'NumberOfBuildWorkers'
             'TfsServer'
             'AgentPool'
@@ -442,7 +435,7 @@ Set-PSFConfig -Module AutomatedLab -Name ValidationSettings -Value @{
             'Capabilities'
         )
         WindowsAdminCenter = @('Port', 'EnableDevMode', 'ConnectedNode', 'UseSsl')
-        Scvmm2016 = @(
+        Scvmm2016          = @(
             'MUOptIn'
             'SqlMachineName'
             'LibraryShareDescription'
@@ -470,7 +463,7 @@ Set-PSFConfig -Module AutomatedLab -Name ValidationSettings -Value @{
             'ConnectHyperVRoleVms'
             'ConnectClusters'
         )
-        Scvmm2019 = @(
+        Scvmm2019          = @(
             'MUOptIn'
             'SqlMachineName'
             'LibraryShareDescription'
@@ -685,8 +678,7 @@ Set-PSFConfig -Module AutomatedLab -Name ProductKeyFilePathCustom -Value $fcPath
 #endregion
 
 #region Linux folder
-if ($IsLinux -or $IsMacOs -and -not (Test-Path (Join-Path -Path (Get-PSFConfigValue -FullName AutomatedLab.LabAppDataRoot) -ChildPath 'Stores')))
-{
+if ($IsLinux -or $IsMacOs -and -not (Test-Path (Join-Path -Path (Get-PSFConfigValue -FullName AutomatedLab.LabAppDataRoot) -ChildPath 'Stores'))) {
     $null = New-Item -ItemType Directory -Path (Join-Path -Path (Get-PSFConfigValue -FullName AutomatedLab.LabAppDataRoot) -ChildPath 'Stores')
 }
 #endregion
@@ -697,8 +689,7 @@ Register-PSFTeppScriptblock -Name 'AutomatedLab-NotificationProviders' -ScriptBl
 }
 
 Register-PSFTeppScriptblock -Name 'AutomatedLab-OperatingSystem' -ScriptBlock {
-    if (-not $global:AL_OperatingSystems)
-    {
+    if (-not $global:AL_OperatingSystems) {
         $global:AL_OperatingSystems = Get-LabAvailableOperatingSystem -Path $labSources/ISOs -UseOnlyCache -NoDisplay
     }
 

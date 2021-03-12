@@ -1,10 +1,8 @@
 ﻿#region Internals
-$script:hostFilePath = if ($PSEdition -eq 'Desktop' -or $IsWindows)
-{
+$script:hostFilePath = if ($PSEdition -eq 'Desktop' -or $IsWindows) {
     "$($env:SystemRoot)\System32\drivers\etc\hosts"
 }
-elseif ($PSEdition -eq 'Core' -and $IsLinux)
-{
+elseif ($PSEdition -eq 'Core' -and $IsLinux) {
     '/etc/hosts'
 }
 
@@ -73,11 +71,12 @@ namespace System.Net
 '@
 #endregion Internals
 
-Add-Type -TypeDefinition $type -PassThru
+if ((Get-Module -Name HostsFile) ? $false : $true) { 
+    Add-Type -TypeDefinition $type -PassThru 
+}
 
 #region Get-HostFile
-function Get-HostFile
-{
+function Get-HostFile {
     [CmdletBinding()]
     param
     (
@@ -92,44 +91,36 @@ function Get-HostFile
     Write-PSFMessage "Opening file '$script:hostFilePath'"
 
     $currentHostContent = (Get-Content -Path $script:hostFilePath)
-    if ($currentHostContent)
-    {
+    if ($currentHostContent) {
         $currentHostContent = $currentHostContent.ToLower()
     }
 
-    if ($Section)
-    {
+    if ($Section) {
         $startMark = ("#$Section - start").ToLower()
         $endMark = ("#$Section - end").ToLower()
 
-        if (($currentHostContent | Where-Object { $_ -eq $startMark }) -and ($currentHostContent | Where-Object { $_ -eq $endMark }))
-        {
+        if (($currentHostContent | Where-Object { $_ -eq $startMark }) -and ($currentHostContent | Where-Object { $_ -eq $endMark })) {
             $startPosition = $currentHostContent.IndexOf($startMark) + 1
             $endPosition = $currentHostContent.IndexOf($endMark) - 1
             $currentHostContent = $currentHostContent[$startPosition..$endPosition]
         }
-        else
-        {
+        else {
             $currentHostContent = ''
         }
     }
 
-    if ($currentHostContent)
-    {
+    if ($currentHostContent) {
         $hostContent.AddRange($currentHostContent)
 
-        foreach ($entry in $currentHostContent)
-        {
+        foreach ($entry in $currentHostContent) {
             $hostfileIpAddress = [System.Text.RegularExpressions.Regex]::Matches($entry, '^(([2]([0-4][0-9]|[5][0-5])|[0-1]?[0-9]?[0-9])[.]){3}(([2]([0-4][0-9]|[5][0-5])|[0-1]?[0-9]?[0-9]))')[0].Value
             $hostfileHostName = [System.Text.RegularExpressions.Regex]::Matches($entry, '[\w\.-]+$')[0].Value
 
-            if ($entry -notmatch '^(([2]([0-4][0-9]|[5][0-5])|[0-1]?[0-9]?[0-9])[.]){3}(([2]([0-4][0-9]|[5][0-5])|[0-1]?[0-9]?[0-9]))[\t| ]+[\w\.-]+')
-            {
+            if ($entry -notmatch '^(([2]([0-4][0-9]|[5][0-5])|[0-1]?[0-9]?[0-9])[.]){3}(([2]([0-4][0-9]|[5][0-5])|[0-1]?[0-9]?[0-9]))[\t| ]+[\w\.-]+') {
                 continue
             }
 
-            if (-not $hostfileIpAddress -or -not $hostfileHostName)
-            {
+            if (-not $hostfileIpAddress -or -not $hostfileHostName) {
                 #could not get the IP address or hostname from current line
                 continue
             }
@@ -146,8 +137,7 @@ function Get-HostFile
 #endregion Get-HostFile
 
 #region Get-HostEntry
-function Get-HostEntry
-{
+function Get-HostEntry {
     [CmdletBinding()]
     param (
         [Parameter(ParameterSetName = 'ByHostName')]
@@ -161,41 +151,34 @@ function Get-HostEntry
         [string]$Section
     )
 
-    if ($Section)
-    {
+    if ($Section) {
         $hostContent, $hostEntries = Get-HostFile -Section $Section
     }
-    else
-    {
+    else {
         $hostContent, $hostEntries = Get-HostFile
     }
 
-    if ($HostName)
-    {
+    if ($HostName) {
         $results = $hostEntries | Where-Object HostName -eq $HostName
 
         $hostEntries | Where-Object HostName -eq $HostName
     }
-    elseif ($IpAddress)
-    {
+    elseif ($IpAddress) {
         $results = $hostEntries | Where-Object IpAddress -contains $IpAddress
-        if (($results).count -gt 1)
-        {
+        if (($results).count -gt 1) {
             Write-ScreenInfo -Message "More than one entry found in hosts file with IP address '$IpAddress' (host names: $($results.Hostname -join ','). Returning the last entry" -Type Warning
         }
 
         @($hostEntries | Where-Object IpAddress -contains $IpAddress)[-1]
     }
-    else
-    {
+    else {
         $hostEntries
     }
 }
 #endregion Get-HostEntry
 
 #region Add-HostEntry
-function Add-HostEntry
-{
+function Add-HostEntry {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory, ParameterSetName = 'ByString')]
@@ -211,29 +194,25 @@ function Add-HostEntry
         [string]$Section
     )
 
-    if (-not $InputObject)
-    {
+    if (-not $InputObject) {
         $InputObject = New-Object System.Net.HostRecord $IpAddress, $HostName.ToLower()
     }
 
     $hostContent, $hostEntries = Get-HostFile
 
 
-    if ($hostEntries.Contains($InputObject))
-    {
+    if ($hostEntries.Contains($InputObject)) {
         return $false
     }
 
-    if (($hostEntries | Where-Object HostName -eq $HostName) -and ($hostEntries | Where-Object HostName -eq $HostName).IpAddress.IPAddressToString -ne $IpAddress)
-    {
+    if (($hostEntries | Where-Object HostName -eq $HostName) -and ($hostEntries | Where-Object HostName -eq $HostName).IpAddress.IPAddressToString -ne $IpAddress) {
         throw "Trying to add entry to hosts file with name '$HostName'. There is already another entry with this name pointing to another IP address."
     }
 
     $startMark = ("#$Section - start").ToLower()
     $endMark = ("#$Section - end").ToLower()
 
-    if (-not ($hostContent | Where-Object { $_ -eq $startMark }))
-    {
+    if (-not ($hostContent | Where-Object { $_ -eq $startMark })) {
         $hostContent.Add($startMark) | Out-Null
         $hostContent.Add($endMark) | Out-Null
     }
@@ -248,8 +227,7 @@ function Add-HostEntry
 #endregion Add-HostEntry
 
 #region Remove-HostEntry
-function Remove-HostEntry
-{
+function Remove-HostEntry {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory, ParameterSetName = 'ByIpAddress')]
@@ -265,44 +243,36 @@ function Remove-HostEntry
         [string]$Section
     )
 
-    if (-not $InputObject -and -not $IpAddress -and -not $HostName)
-    {
+    if (-not $InputObject -and -not $IpAddress -and -not $HostName) {
         return
     }
 
-    if ($InputObject)
-    {
+    if ($InputObject) {
         $entriesToRemove = $InputObject
     }
-    else
-    {
-        if (-not $InputObject -and ($IpAddress -or $HostName))
-        {
+    else {
+        if (-not $InputObject -and ($IpAddress -or $HostName)) {
             $entriesToRemove = Get-HostEntry @PSBoundParameters
         }
     }
 
-    if (-not $entriesToRemove)
-    {
+    if (-not $entriesToRemove) {
         Write-Error "Trying to remove entry '$HostName' from hosts file. However, there is no entry by that name in this file"
     }
 
     $hostContent, $hostEntries = Get-HostFile -SuppressOutput
 
     $startMark = ("#$Section - start").ToLower()
-    if (-not ($hostContent | Where-Object { $_ -eq $startMark }))
-    {
+    if (-not ($hostContent | Where-Object { $_ -eq $startMark })) {
         Write-Error "Trying to remove entry '$HostName' from hosts file. However, there is no section named '$Section' defined in the hosts file which is a requirement for removing entries from this."
         return
     }
-    elseif ($entriesToRemove.Count -gt 1)
-    {
+    elseif ($entriesToRemove.Count -gt 1) {
         Write-Error "Trying to remove entry '$HostName' from hosts file. However, there are more than one entry with this name in the hosts file. Please remove this entry manually."
         return
     }
 
-    if ($entriesToRemove)
-    {
+    if ($entriesToRemove) {
         $entryToRemove = ($hostContent -match "^($($entriesToRemove.IpAddress))[\t| ]+$($entriesToRemove.HostName)")[0]
         $entryToRemoveIndex = $hostContent.IndexOf($entryToRemove)
 
@@ -315,8 +285,7 @@ function Remove-HostEntry
 #endregion Remove-HostEntry
 
 #region function Clear-HostFile
-function Clear-HostFile
-{
+function Clear-HostFile {
     [CmdletBinding()]
 
     param
@@ -332,8 +301,7 @@ function Clear-HostFile
 
     $startPosition = $hostContent.IndexOf($startMark)
     $endPosition = $hostContent.IndexOf($endMark)
-    if ($startPosition -eq -1 -and $endPosition - 1)
-    {
+    if ($startPosition -eq -1 -and $endPosition - 1) {
         Write-Error "Trying to remove all entries for lab from host file. However, there is no section named '$Section' defined in the hosts file which is a requirement for removing entries from this."
         return
     }
